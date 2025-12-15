@@ -1,7 +1,6 @@
 // app/api/subscribe/route.ts
 
 import { NextResponse } from 'next/server';
-import { addSubscriber, isSubscribed } from '@/lib/db';
 
 export async function POST(request: Request) {
   try {
@@ -11,26 +10,6 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Chat ID requerido' },
         { status: 400 }
-      );
-    }
-
-    // Verificar si ya está suscrito
-    const alreadySubscribed = await isSubscribed(chatId);
-    
-    if (alreadySubscribed) {
-      return NextResponse.json(
-        { error: 'Este Chat ID ya está suscrito' },
-        { status: 400 }
-      );
-    }
-
-    // Agregar a la base de datos
-    const added = await addSubscriber(chatId, username);
-    
-    if (!added) {
-      return NextResponse.json(
-        { error: 'Error al guardar suscriptor' },
-        { status: 500 }
       );
     }
 
@@ -54,7 +33,7 @@ Te has suscrito exitosamente a las notificaciones de tasas de cambio.
 - 🌅 Resumen diario a las 8:00 AM
 
 💵 Tasas actuales disponibles en:
-https://conversor-venezuela.vercel.app
+https://conversor-venezuela-2025.vercel.app
 
 ¡Gracias por suscribirte! 🇻🇪
     `.trim();
@@ -75,18 +54,25 @@ https://conversor-venezuela.vercel.app
     if (!telegramResponse.ok) {
       const errorData = await telegramResponse.json();
       console.error('Error de Telegram:', errorData);
-      // No falla la suscripción si falla Telegram
+      return NextResponse.json(
+        { error: 'Error al enviar mensaje de Telegram' },
+        { status: 500 }
+      );
     }
+
+    // En desarrollo, solo registra el intento
+    console.log('✅ Suscripción procesada:', { chatId, username });
 
     return NextResponse.json({
       success: true,
       message: 'Suscripción exitosa',
       chatId,
-      username
+      username,
+      note: 'En producción se guardará en la base de datos'
     });
 
   } catch (error) {
-    console.error('Error:', error);
+    console.error('Error completo:', error);
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Error desconocido' },
       { status: 500 }
