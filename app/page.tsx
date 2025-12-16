@@ -49,8 +49,8 @@ export default function Home() {
       setShowInstallButton(true);
     };
 
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    window.addEventListener("beforeinstallprompt", handler);
+    return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
   const handleInstallClick = async () => {
@@ -59,7 +59,7 @@ export default function Home() {
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
 
-    if (outcome === 'accepted') {
+    if (outcome === "accepted") {
       setShowInstallButton(false);
     }
 
@@ -121,7 +121,7 @@ export default function Home() {
             🇻🇪 Conversor Venezuela
           </h1>
           <p className="text-slate-300">Tasas en tiempo real</p>
-          
+
           {/* Botones de acción */}
           <div className="flex flex-wrap gap-2 justify-center mt-4">
             <Button
@@ -130,7 +130,7 @@ export default function Home() {
             >
               📱 Suscribirme a notificaciones
             </Button>
-            
+
             {showInstallButton && (
               <Button
                 onClick={handleInstallClick}
