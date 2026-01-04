@@ -4,6 +4,9 @@
 import { NextResponse } from 'next/server';
 import { scrapeBCV } from '@/lib/bcv-scraper';
 
+export const dynamic = 'force-dynamic'; 
+
+
 export async function GET() {
   const debug: any = {
     timestamp: new Date().toISOString(),

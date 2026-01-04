@@ -4,6 +4,8 @@
 import { NextResponse } from 'next/server';
 import { saveRateToHistory } from "@/lib/rate-history-service";
 
+export const dynamic = 'force-dynamic'; 
+
 // Tu API key
 const EXCHANGERATE_API_KEY = 'fe961c28fac21978f7abd47e';
 

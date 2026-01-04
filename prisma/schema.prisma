@@ -4,12 +4,12 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"  // ✅ CAMBIO 1: sqlite → postgresql
   url      = env("DATABASE_URL") 
 }
 
 model RateHistory {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(cuid())  // ✅ CAMBIO 2: Int → String y autoincrement() → cuid()
   fecha     DateTime @default(now())
   bcv       Float
   paralelo  Float
@@ -25,7 +25,7 @@ model RateHistory {
 }
 
 model Subscriber {
-  id        Int      @id @default(autoincrement())
+  id        String   @id @default(cuid())  // ✅ CAMBIO 2: Int → String y autoincrement() → cuid()
   chatId    String   @unique
   nombre    String?
   activo    Boolean  @default(true)

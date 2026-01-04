@@ -3,8 +3,10 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
+export const dynamic = 'force-dynamic'; 
+
 interface HistoricalRecord {
-  id: number;
+  id: string;  // 👈 CAMBIAR de number a string
   fecha: Date;
   bcv: number;
   paralelo: number;
