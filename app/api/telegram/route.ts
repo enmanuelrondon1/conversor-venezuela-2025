@@ -2,14 +2,19 @@
 
 import { NextResponse } from 'next/server';
 import { getActiveSubscribers } from '@/lib/db';
+import prisma from '@/lib/prisma';
 
-// Variable en memoria para comparar
-let lastRates: { oficial: number; paralelo: number } | null = null;
+interface ExchangeRate {
+  fuente: string;
+  nombre: string;
+  promedio: number;
+  fechaActualizacion: string;
+}
 
 export async function GET() {
   try {
-    // Obtener tasas actuales de Venezuela
-    const response = await fetch('https://ve.dolarapi.com/v1/dolares', {
+    // 1. Obtener tasas actuales desde NUESTRA API
+    const response = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/api/rates`, {
       cache: 'no-store'
     });
     
@@ -17,19 +22,34 @@ export async function GET() {
       throw new Error('Error al obtener tasas');
     }
     
-    const data = await response.json();
+    const data: ExchangeRate[] = await response.json();
     
-    const oficialRate = data.find((r: any) => r.fuente === 'oficial');
-    const paraleloRate = data.find((r: any) => r.fuente === 'paralelo');
+    const oficialRate = data.find((r) => r.fuente === 'oficial');
+    const paraleloRate = data.find((r) => r.fuente === 'paralelo');
+    const euroRate = data.find((r) => r.fuente === 'euro');
     
-    if (!oficialRate || !paraleloRate) {
+    if (!oficialRate || !paraleloRate || !euroRate) {
       throw new Error('No se encontraron las tasas necesarias');
     }
 
     const currentRates = {
       oficial: oficialRate.promedio,
-      paralelo: paraleloRate.promedio
+      paralelo: paraleloRate.promedio,
+      euro: euroRate.promedio
     };
+
+    // 2. Obtener último registro ANTERIOR (ignorar el de hoy) para comparar
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const lastRecord = await prisma.rateHistory.findFirst({
+      where: {
+        fecha: {
+          lt: today  // Menor que hoy (lt = less than)
+        }
+      },
+      orderBy: { fecha: 'desc' }
+    });
 
     // Verificar si es hora del resumen diario (8:00 AM - 8:30 AM hora de Venezuela)
     const now = new Date();
@@ -38,20 +58,21 @@ export async function GET() {
     const minutes = venezuelaTime.getMinutes();
     const isDailyReportTime = hour === 8 && minutes < 30;
 
-    // Si es la primera ejecución
-    if (lastRates === null) {
-      lastRates = currentRates;
-      
+    // 3. Si es la primera ejecución (no hay registros previos)
+    if (!lastRecord) {
       const message = `
 🚀 *Sistema Iniciado - Conversor Venezuela*
 
 💵 *Dólar BCV Oficial*
 ${currentRates.oficial.toFixed(2)} Bs/$
 
-💸 *Dólar Paralelo (P2P/Crypto)*
+💸 *Dólar Paralelo*
 ${currentRates.paralelo.toFixed(2)} Bs/$
 
-📊 *Diferencia:* ${(currentRates.paralelo - currentRates.oficial).toFixed(2)} Bs (${((currentRates.paralelo / currentRates.oficial - 1) * 100).toFixed(2)}%)
+💶 *Euro*
+${currentRates.euro.toFixed(2)} Bs/€
+
+📊 *Diferencia BCV-Paralelo:* ${((currentRates.paralelo / currentRates.oficial - 1) * 100).toFixed(2)}%
 
 ✅ Notificaciones activas
 📅 ${venezuelaTime.toLocaleDateString('es-VE', { 
@@ -76,21 +97,35 @@ ${currentRates.paralelo.toFixed(2)} Bs/$
       });
     }
 
-    // Calcular cambio porcentual
-    let shouldNotify = isDailyReportTime;
+    // 4. Calcular cambio porcentual
     const changePercent = {
-      oficial: ((currentRates.oficial - lastRates.oficial) / lastRates.oficial) * 100,
-      paralelo: ((currentRates.paralelo - lastRates.paralelo) / lastRates.paralelo) * 100
+      oficial: ((currentRates.oficial - lastRecord.bcv) / lastRecord.bcv) * 100,
+      paralelo: ((currentRates.paralelo - lastRecord.paralelo) / lastRecord.paralelo) * 100,
+      euro: lastRecord.euro 
+        ? ((currentRates.euro - lastRecord.euro) / lastRecord.euro) * 100 
+        : 0
     };
     
+    // 5. Determinar si hay cambios significativos
+    let shouldNotify = isDailyReportTime;
+    const significantChanges: string[] = [];
+    
     if (!isDailyReportTime) {
-      const significantChange = Math.abs(changePercent.oficial) >= 1 || Math.abs(changePercent.paralelo) >= 1;
-      shouldNotify = significantChange;
+      if (Math.abs(changePercent.oficial) >= 1) {
+        significantChanges.push('oficial');
+      }
+      if (Math.abs(changePercent.paralelo) >= 1) {
+        significantChanges.push('paralelo');
+      }
+      if (Math.abs(changePercent.euro) >= 1) {
+        significantChanges.push('euro');
+      }
+      
+      shouldNotify = significantChanges.length > 0;
     }
 
-    // Si no hay razón para notificar
+    // 6. Si no hay razón para notificar
     if (!shouldNotify) {
-      lastRates = currentRates;
       return NextResponse.json({ 
         success: true, 
         message: 'Sin cambios significativos',
@@ -100,20 +135,27 @@ ${currentRates.paralelo.toFixed(2)} Bs/$
       });
     }
 
-    // Preparar mensaje
+    // 7. Preparar mensaje
     let message = '';
     
     if (isDailyReportTime) {
+      // RESUMEN DIARIO
       message = `
 🌅 *Resumen Diario - Venezuela*
 
 💵 *Dólar BCV Oficial*
 ${currentRates.oficial.toFixed(2)} Bs/$
+${changePercent.oficial !== 0 ? `Cambio: ${changePercent.oficial > 0 ? '+' : ''}${changePercent.oficial.toFixed(2)}%` : ''}
 
-💸 *Dólar Paralelo (P2P/Crypto)*
+💸 *Dólar Paralelo*
 ${currentRates.paralelo.toFixed(2)} Bs/$
+${changePercent.paralelo !== 0 ? `Cambio: ${changePercent.paralelo > 0 ? '+' : ''}${changePercent.paralelo.toFixed(2)}%` : ''}
 
-📊 *Diferencia:* ${(currentRates.paralelo - currentRates.oficial).toFixed(2)} Bs (${((currentRates.paralelo / currentRates.oficial - 1) * 100).toFixed(2)}%)
+💶 *Euro*
+${currentRates.euro.toFixed(2)} Bs/€
+${changePercent.euro !== 0 ? `Cambio: ${changePercent.euro > 0 ? '+' : ''}${changePercent.euro.toFixed(2)}%` : ''}
+
+📊 *Diferencia BCV-Paralelo:* ${((currentRates.paralelo / currentRates.oficial - 1) * 100).toFixed(2)}%
 
 📅 ${venezuelaTime.toLocaleDateString('es-VE', { 
   weekday: 'long', 
@@ -123,19 +165,42 @@ ${currentRates.paralelo.toFixed(2)} Bs/$
 })}
       `.trim();
     } else {
-      const oficialArrow = changePercent.oficial > 0 ? '📈' : '📉';
-      const paraleloArrow = changePercent.paralelo > 0 ? '📈' : '📉';
+      // ALERTA DE CAMBIO
+      const alerts: string[] = [];
+      
+      if (significantChanges.includes('oficial')) {
+        const arrow = changePercent.oficial > 0 ? '📈' : '📉';
+        const direction = changePercent.oficial > 0 ? 'SUBIÓ' : 'BAJÓ';
+        alerts.push(`
+${changePercent.oficial > 0 ? '🟢' : '🔴'} *Dólar BCV ${direction}* ${arrow}
+${lastRecord.bcv.toFixed(2)} → ${currentRates.oficial.toFixed(2)} Bs/$
+Cambio: ${changePercent.oficial > 0 ? '+' : ''}${changePercent.oficial.toFixed(2)}% (${(currentRates.oficial - lastRecord.bcv).toFixed(2)} Bs)`);
+      }
+      
+      if (significantChanges.includes('paralelo')) {
+        const arrow = changePercent.paralelo > 0 ? '📈' : '📉';
+        const direction = changePercent.paralelo > 0 ? 'SUBIÓ' : 'BAJÓ';
+        alerts.push(`
+${changePercent.paralelo > 0 ? '🟢' : '🔴'} *Dólar Paralelo ${direction}* ${arrow}
+${lastRecord.paralelo.toFixed(2)} → ${currentRates.paralelo.toFixed(2)} Bs/$
+Cambio: ${changePercent.paralelo > 0 ? '+' : ''}${changePercent.paralelo.toFixed(2)}% (${(currentRates.paralelo - lastRecord.paralelo).toFixed(2)} Bs)`);
+      }
+      
+      if (significantChanges.includes('euro') && lastRecord.euro) {
+        const arrow = changePercent.euro > 0 ? '📈' : '📉';
+        const direction = changePercent.euro > 0 ? 'SUBIÓ' : 'BAJÓ';
+        alerts.push(`
+${changePercent.euro > 0 ? '🟢' : '🔴'} *Euro ${direction}* ${arrow}
+${lastRecord.euro.toFixed(2)} → ${currentRates.euro.toFixed(2)} Bs/€
+Cambio: ${changePercent.euro > 0 ? '+' : ''}${changePercent.euro.toFixed(2)}% (${(currentRates.euro - lastRecord.euro).toFixed(2)} Bs)`);
+      }
       
       message = `
 🔔 *¡Cambio Detectado!*
 
-💵 *Dólar BCV Oficial* ${oficialArrow}
-${lastRates.oficial.toFixed(2)} → ${currentRates.oficial.toFixed(2)} Bs
-Cambio: ${changePercent.oficial > 0 ? '+' : ''}${changePercent.oficial.toFixed(2)}%
+${alerts.join('\n\n')}
 
-💸 *Dólar Paralelo* ${paraleloArrow}
-${lastRates.paralelo.toFixed(2)} → ${currentRates.paralelo.toFixed(2)} Bs
-Cambio: ${changePercent.paralelo > 0 ? '+' : ''}${changePercent.paralelo.toFixed(2)}%
+📊 *Diferencia BCV-Paralelo:* ${((currentRates.paralelo / currentRates.oficial - 1) * 100).toFixed(2)}%
 
 ⏰ ${venezuelaTime.toLocaleTimeString('es-VE', { 
   hour: '2-digit', 
@@ -143,8 +208,6 @@ Cambio: ${changePercent.paralelo > 0 ? '+' : ''}${changePercent.paralelo.toFixed
 })}
       `.trim();
     }
-    
-    lastRates = currentRates;
     
     await sendTelegramMessage(message);
     
@@ -154,7 +217,8 @@ Cambio: ${changePercent.paralelo > 0 ? '+' : ''}${changePercent.paralelo.toFixed
       notified: true,
       type: isDailyReportTime ? 'daily_report' : 'change_detected',
       rates: currentRates,
-      changePercent
+      changePercent,
+      significantChanges
     });
   } catch (error) {
     console.error('Error:', error);

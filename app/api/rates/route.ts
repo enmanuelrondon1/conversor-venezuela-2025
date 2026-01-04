@@ -2,8 +2,9 @@
 // SOLUCIÓN DEFINITIVA CON EXCHANGERATE-API
 
 import { NextResponse } from 'next/server';
+import { saveRateToHistory } from "@/lib/rate-history-service";
 
-// ¡IMPORTANTE! Reemplaza esto con tu API key real
+// Tu API key
 const EXCHANGERATE_API_KEY = 'fe961c28fac21978f7abd47e';
 
 interface ExchangeRate {
@@ -21,59 +22,79 @@ let lastFetchTime: number = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
 /**
- * Obtiene la tasa oficial del BCV desde ExchangeRate-API
- * ¡Esta API tiene el valor correcto y actualizado!
+ * Obtiene la tasa oficial del BCV y del Euro desde ExchangeRate-API
  */
-async function fetchBCVOfficial(): Promise<ExchangeRate | null> {
+async function fetchOfficialRates(): Promise<{ bcv: ExchangeRate | null, euro: ExchangeRate | null }> {
   try {
-    console.log('🔍 Obteniendo tasa oficial del BCV desde ExchangeRate-API...');
+    console.log('🔍 Obteniendo tasas oficiales desde ExchangeRate-API...');
     
-    const url = `https://v6.exchangerate-api.com/v6/${EXCHANGERATE_API_KEY}/latest/USD`;
-    
-    const response = await fetch(url, {
+    // 1. Obtener USD/VES (Dólar BCV)
+    const usdUrl = `https://v6.exchangerate-api.com/v6/${EXCHANGERATE_API_KEY}/latest/USD`;
+    const usdResponse = await fetch(usdUrl, {
       cache: 'no-store',
       signal: AbortSignal.timeout(10000)
     });
     
-    if (!response.ok) {
-      console.error('❌ ExchangeRate-API response not OK:', response.status);
-      return null;
+    if (!usdResponse.ok) {
+      console.error('❌ Error obteniendo USD/VES');
+      return { bcv: null, euro: null };
     }
     
-    const data = await response.json();
+    const usdData = await usdResponse.json();
+    const usdToVes = usdData.conversion_rates?.VES;
     
-    if (data.result !== 'success') {
-      console.error('❌ ExchangeRate-API error:', data);
-      return null;
+    if (!usdToVes) {
+      console.error('❌ No se encontró VES en USD');
+      return { bcv: null, euro: null };
     }
     
-    const vesRate = data.conversion_rates?.VES;
+    // 2. Obtener EUR/VES (Euro) - Hacer llamada con base EUR
+    const eurUrl = `https://v6.exchangerate-api.com/v6/${EXCHANGERATE_API_KEY}/latest/EUR`;
+    const eurResponse = await fetch(eurUrl, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000)
+    });
     
-    if (!vesRate) {
-      console.error('❌ No se encontró VES en la respuesta');
-      return null;
+    let eurToVes = usdToVes * 1.17; // Valor por defecto si falla
+    
+    if (eurResponse.ok) {
+      const eurData = await eurResponse.json();
+      const eurVesRate = eurData.conversion_rates?.VES;
+      
+      if (eurVesRate) {
+        eurToVes = eurVesRate;
+        console.log('✅ EUR/VES obtenido directamente:', eurToVes);
+      }
     }
     
-    // Convertir el timestamp de la API a fecha legible
-    const lastUpdate = new Date(data.time_last_update_unix * 1000).toISOString();
+    const lastUpdate = new Date(usdData.time_last_update_unix * 1000).toISOString();
     
-    const rate: ExchangeRate = {
+    const bcvRate: ExchangeRate = {
       fuente: 'oficial',
       nombre: 'Dólar BCV Oficial',
       compra: null,
       venta: null,
-      promedio: vesRate,
+      promedio: usdToVes,
       fechaActualizacion: lastUpdate
     };
     
-    console.log('✅ Tasa BCV oficial obtenida:', vesRate, 'Bs/$');
-    console.log('📅 Última actualización:', new Date(lastUpdate).toLocaleString('es-VE'));
+    const euroRate: ExchangeRate = {
+      fuente: 'euro',
+      nombre: 'Euro',
+      compra: null,
+      venta: null,
+      promedio: eurToVes,
+      fechaActualizacion: lastUpdate
+    };
     
-    return rate;
+    console.log('✅ USD/VES (BCV):', usdToVes.toFixed(2), 'Bs/$');
+    console.log('✅ EUR/VES:', eurToVes.toFixed(2), 'Bs/€');
+    
+    return { bcv: bcvRate, euro: euroRate };
     
   } catch (error) {
-    console.error('❌ Error obteniendo tasa oficial:', error);
-    return null;
+    console.error('❌ Error obteniendo tasas oficiales:', error);
+    return { bcv: null, euro: null };
   }
 }
 
@@ -125,13 +146,12 @@ async function fetchAllRates(): Promise<ExchangeRate[]> {
   
   const rates: ExchangeRate[] = [];
   
-  // 1. Obtener tasa oficial del BCV (ExchangeRate-API)
-  const bcvOfficial = await fetchBCVOfficial();
-  if (bcvOfficial) {
-    rates.push(bcvOfficial);
-  }
+  // 1. Obtener tasas oficiales (BCV y Euro)
+  const { bcv, euro } = await fetchOfficialRates();
+  if (bcv) rates.push(bcv);
+  if (euro) rates.push(euro);
   
-  // 2. Obtener tasas del paralelo (DolarApi)
+  // 2. Obtener tasas del paralelo
   const paraleloRates = await fetchParaleloRates();
   rates.push(...paraleloRates);
   
@@ -140,20 +160,38 @@ async function fetchAllRates(): Promise<ExchangeRate[]> {
     throw new Error('No se pudieron obtener tasas de ninguna fuente');
   }
   
+  // 3. Guardar en histórico automáticamente
+  const oficialRate = rates.find(r => r.fuente === 'oficial');
+  const paraleloRate = rates.find(r => r.fuente === 'paralelo');
+  const euroRateData = rates.find(r => r.fuente === 'euro');
+  
+  if (oficialRate && paraleloRate && euroRateData) {
+    try {
+      await saveRateToHistory({
+        bcv: oficialRate.promedio,
+        paralelo: paraleloRate.promedio,
+        euro: euroRateData.promedio,
+      });
+      console.log('✅ Tasas guardadas en histórico');
+    } catch (error) {
+      console.error('⚠️ Error guardando en histórico:', error);
+    }
+  }
+  
   // Actualizar caché
   cachedRates = rates;
   lastFetchTime = now;
   
   console.log('💾 Caché actualizado con', rates.length, 'tasas');
-  console.log('💵 Dólar BCV Oficial:', rates.find(r => r.fuente === 'oficial')?.promedio || 'N/A', 'Bs/$');
-  console.log('💸 Dólar Paralelo:', rates.find(r => r.fuente === 'paralelo')?.promedio || 'N/A', 'Bs/$');
+  console.log('💵 Dólar BCV:', rates.find(r => r.fuente === 'oficial')?.promedio.toFixed(2) || 'N/A', 'Bs/$');
+  console.log('💶 Euro:', rates.find(r => r.fuente === 'euro')?.promedio.toFixed(2) || 'N/A', 'Bs/€');
+  console.log('💸 Paralelo:', rates.find(r => r.fuente === 'paralelo')?.promedio.toFixed(2) || 'N/A', 'Bs/$');
   
   return rates;
 }
 
 /**
  * Endpoint GET /api/rates
- * Retorna todas las tasas con sistema de caché
  */
 export async function GET() {
   try {
@@ -179,8 +217,7 @@ export async function GET() {
 }
 
 /**
- * Endpoint POST /api/rates
- * Permite forzar actualización del caché
+ * Endpoint POST /api/rates - Forzar actualización del caché
  */
 export async function POST() {
   try {
