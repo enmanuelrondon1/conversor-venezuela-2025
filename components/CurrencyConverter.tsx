@@ -16,7 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeftRight, Calculator } from "lucide-react";
+import { ArrowLeftRight, Calculator, Copy, Check } from "lucide-react";
+import { useState } from "react";
 
 interface CurrencyConverterProps {
   amount: string;
@@ -45,6 +46,14 @@ export default function CurrencyConverter({
   swapCurrencies,
   lastUpdate,
 }: CurrencyConverterProps) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(result.toFixed(2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+  };
+
   return (
     <Card className="shadow-xl border-0">
       <CardHeader className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-t-lg">
@@ -111,7 +120,7 @@ export default function CurrencyConverter({
         {/* A */}
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">A:</label>
-          <div className="flex gap-3">
+          <div className="relative flex items-center gap-3">
             <Select value={toCurrency} onValueChange={setToCurrency}>
               <SelectTrigger className="w-32 bg-white border-gray-300">
                 <SelectValue />
@@ -125,8 +134,20 @@ export default function CurrencyConverter({
               type="text"
               value={result.toFixed(2)}
               readOnly
-              className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-300 font-bold text-2xl text-blue-600"
+              className="bg-gradient-to-r from-blue-50 to-purple-50 border-blue-300 font-bold text-2xl text-blue-600 pr-10"
             />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCopy}
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 text-gray-500 hover:bg-gray-200"
+            >
+              {copied ? (
+                <Check className="h-5 w-5 text-green-500" />
+              ) : (
+                <Copy className="h-5 w-5" />
+              )}
+            </Button>
           </div>
         </div>
 
