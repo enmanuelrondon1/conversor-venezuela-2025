@@ -96,15 +96,16 @@ https://conversor-venezuela-2025.vercel.app
 
     const sent = await sendTelegramMessage(chatId, welcomeMessage);
 
+    // ✅ CAMBIO PRINCIPAL: Guardar usuario aunque Telegram falle
     if (!sent) {
-      // Si falla el envío, eliminar de la base de datos
-      await prisma.subscriber.delete({
-        where: { id: subscriber.id }
-      });
-      
       return NextResponse.json(
-        { error: 'No se pudo enviar el mensaje de Telegram. Verifica tu Chat ID.' },
-        { status: 500 }
+        { 
+          success: true,
+          warning: 'Usuario guardado exitosamente, pero no se pudo enviar el mensaje de bienvenida. Verifica tu Chat ID o inicia una conversación con el bot primero.',
+          chatId,
+          username
+        },
+        { status: 200 }
       );
     }
 
