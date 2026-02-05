@@ -200,55 +200,81 @@ ${
       })}
       `.trim();
     } else {
-      // ALERTA DE CAMBIO
-      const alerts: string[] = [];
+      // ALERTA DE CAMBIO - NUEVO FORMATO MEJORADO
+      const hasOficialChange = significantChanges.includes("oficial");
+      const hasParaleloChange = significantChanges.includes("paralelo");
+      const hasEuroChange = significantChanges.includes("euro");
 
-      if (significantChanges.includes("oficial")) {
+      // Determinar el título principal basado en qué cambió más
+      let mainTitle = "🔔 *¡Cambio Detectado en las Tasas!*";
+      
+      if (significantChanges.length === 1) {
+        if (hasOficialChange) {
+          mainTitle = changePercent.oficial > 0 
+            ? "🟢 *Dólar BCV SUBIÓ*" 
+            : "🔴 *Dólar BCV BAJÓ*";
+        } else if (hasParaleloChange) {
+          mainTitle = changePercent.paralelo > 0 
+            ? "🟢 *Dólar Paralelo SUBIÓ*" 
+            : "🔴 *Dólar Paralelo BAJÓ*";
+        } else if (hasEuroChange) {
+          mainTitle = changePercent.euro > 0 
+            ? "🟢 *Euro SUBIÓ*" 
+            : "🔴 *Euro BAJÓ*";
+        }
+      }
+
+      // Construir secciones de cada moneda
+      let oficialSection = "";
+      let paraleloSection = "";
+      let euroSection = "";
+
+      // SECCIÓN DÓLAR BCV
+      if (hasOficialChange) {
         const arrow = changePercent.oficial > 0 ? "📈" : "📉";
-        const direction = changePercent.oficial > 0 ? "SUBIÓ" : "BAJÓ";
-        alerts.push(`
-${changePercent.oficial > 0 ? "🟢" : "🔴"} *Dólar BCV ${direction}* ${arrow}
-${lastRecord.bcv.toFixed(2)} → ${currentRates.oficial.toFixed(2)} Bs/$
-Cambio: ${changePercent.oficial > 0 ? "+" : ""}${changePercent.oficial.toFixed(
-          2
-        )}% (${(currentRates.oficial - lastRecord.bcv).toFixed(2)} Bs)`);
+        const emoji = changePercent.oficial > 0 ? "🟢" : "🔴";
+        oficialSection = `
+${emoji} *Dólar BCV:* ${lastRecord.bcv.toFixed(2)} → ${currentRates.oficial.toFixed(2)} Bs/$
+${arrow} Cambio: ${changePercent.oficial > 0 ? "+" : ""}${changePercent.oficial.toFixed(2)}% (${(currentRates.oficial - lastRecord.bcv).toFixed(2)} Bs)`;
+      } else {
+        oficialSection = `
+💵 *Dólar BCV:* ${currentRates.oficial.toFixed(2)} Bs/$
+Sin cambios significativos`;
       }
 
-      if (significantChanges.includes("paralelo")) {
+      // SECCIÓN DÓLAR PARALELO
+      if (hasParaleloChange) {
         const arrow = changePercent.paralelo > 0 ? "📈" : "📉";
-        const direction = changePercent.paralelo > 0 ? "SUBIÓ" : "BAJÓ";
-        alerts.push(`
-${
-  changePercent.paralelo > 0 ? "🟢" : "🔴"
-} *Dólar Paralelo ${direction}* ${arrow}
-${lastRecord.paralelo.toFixed(2)} → ${currentRates.paralelo.toFixed(2)} Bs/$
-Cambio: ${
-          changePercent.paralelo > 0 ? "+" : ""
-        }${changePercent.paralelo.toFixed(2)}% (${(
-          currentRates.paralelo - lastRecord.paralelo
-        ).toFixed(2)} Bs)`);
+        const emoji = changePercent.paralelo > 0 ? "🟢" : "🔴";
+        paraleloSection = `
+${emoji} *Dólar Paralelo:* ${lastRecord.paralelo.toFixed(2)} → ${currentRates.paralelo.toFixed(2)} Bs/$
+${arrow} Cambio: ${changePercent.paralelo > 0 ? "+" : ""}${changePercent.paralelo.toFixed(2)}% (${(currentRates.paralelo - lastRecord.paralelo).toFixed(2)} Bs)`;
+      } else {
+        paraleloSection = `
+💸 *Dólar Paralelo:* ${currentRates.paralelo.toFixed(2)} Bs/$
+Sin cambios significativos`;
       }
 
-      if (significantChanges.includes("euro") && lastRecord.euro) {
+      // SECCIÓN EURO
+      if (hasEuroChange && lastRecord.euro) {
         const arrow = changePercent.euro > 0 ? "📈" : "📉";
-        const direction = changePercent.euro > 0 ? "SUBIÓ" : "BAJÓ";
-        alerts.push(`
-${changePercent.euro > 0 ? "🟢" : "🔴"} *Euro ${direction}* ${arrow}
-${lastRecord.euro.toFixed(2)} → ${currentRates.euro.toFixed(2)} Bs/€
-Cambio: ${changePercent.euro > 0 ? "+" : ""}${changePercent.euro.toFixed(
-          2
-        )}% (${(currentRates.euro - lastRecord.euro).toFixed(2)} Bs)`);
+        const emoji = changePercent.euro > 0 ? "🟢" : "🔴";
+        euroSection = `
+${emoji} *Euro:* ${lastRecord.euro.toFixed(2)} → ${currentRates.euro.toFixed(2)} Bs/€
+${arrow} Cambio: ${changePercent.euro > 0 ? "+" : ""}${changePercent.euro.toFixed(2)}% (${(currentRates.euro - lastRecord.euro).toFixed(2)} Bs)`;
+      } else {
+        euroSection = `
+💶 *Euro:* ${currentRates.euro.toFixed(2)} Bs/€
+Sin cambios significativos`;
       }
 
       message = `
-🔔 *¡Cambio Detectado!*
+${mainTitle}
+${oficialSection}
+${paraleloSection}
+${euroSection}
 
-${alerts.join("\n\n")}
-
-📊 *Diferencia BCV-Paralelo:* ${(
-        (currentRates.paralelo / currentRates.oficial - 1) *
-        100
-      ).toFixed(2)}%
+📊 *Diferencia BCV-Paralelo:* ${((currentRates.paralelo / currentRates.oficial - 1) * 100).toFixed(2)}%
 
 ⏰ ${venezuelaTime.toLocaleTimeString("es-VE", {
         hour: "2-digit",
@@ -288,7 +314,7 @@ async function sendTelegramMessage(message: string) {
   // Obtener todos los suscriptores activos de la base de datos
   const chatIds = await getActiveSubscribers();
 
-  console.log("🔍 DEBUG - Chat IDs obtenidos:", chatIds); // 👈 NUEVO
+  console.log("🔍 DEBUG - Chat IDs obtenidos:", chatIds);
 
   if (chatIds.length === 0) {
     console.log("No hay suscriptores activos");
