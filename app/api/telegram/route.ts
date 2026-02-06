@@ -283,7 +283,7 @@ ${euroSection}
       `.trim();
     }
 
-    await sendTelegramMessage(message);
+    const sendResult = await sendTelegramMessage(message);
 
     return NextResponse.json({
       success: true,
@@ -293,6 +293,7 @@ ${euroSection}
       rates: currentRates,
       changePercent,
       significantChanges,
+      deliveryReport: sendResult,
     });
   } catch (error) {
     console.error("Error:", error);
@@ -303,7 +304,7 @@ ${euroSection}
   }
 }
 
-// Función para enviar mensajes a TODOS los suscriptores
+// Función para enviar mensajes a TODOS los suscriptores con manejo de errores mejorado
 async function sendTelegramMessage(message: string) {
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -318,30 +319,102 @@ async function sendTelegramMessage(message: string) {
 
   if (chatIds.length === 0) {
     console.log("No hay suscriptores activos");
-    return;
+    return {
+      sent: 0,
+      failed: 0,
+      deactivated: 0,
+    };
   }
 
-  console.log(`Enviando mensaje a ${chatIds.length} suscriptores`);
+  console.log(`📤 Enviando mensaje a ${chatIds.length} suscriptores`);
 
-  // Enviar a todos
-  const promises = chatIds.map((chatId) =>
-    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message,
-        parse_mode: "Markdown",
-      }),
+  // Enviar a todos y capturar resultados
+  const results = await Promise.allSettled(
+    chatIds.map(async (chatId) => {
+      try {
+        const response = await fetch(
+          `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: message,
+              parse_mode: "Markdown",
+            }),
+          }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          // Detectar si el error es porque el usuario no inició conversación con el bot
+          if (
+            data.error_code === 403 ||
+            (data.description &&
+              (data.description.includes("bot was blocked") ||
+                data.description.includes("user is deactivated") ||
+                data.description.includes("bot can't initiate")))
+          ) {
+            console.warn(
+              `⚠️ Usuario ${chatId} no puede recibir mensajes. Desactivando...`
+            );
+
+            // Desactivar automáticamente este suscriptor
+            await prisma.subscriber.update({
+              where: { chatId },
+              data: { activo: false, updatedAt: new Date() },
+            });
+
+            throw new Error(`DEACTIVATED:${chatId}`);
+          }
+
+          throw new Error(
+            `Telegram error: ${data.description || "Unknown error"}`
+          );
+        }
+
+        console.log(`✅ Mensaje enviado a ${chatId}`);
+        return { chatId, status: "sent" };
+      } catch (error) {
+        if (error instanceof Error && error.message.startsWith("DEACTIVATED:")) {
+          return { chatId, status: "deactivated" };
+        }
+        console.error(`❌ Error enviando a ${chatId}:`, error);
+        return { chatId, status: "failed" };
+      }
     })
   );
 
-  const results = await Promise.allSettled(promises);
+  // Contar resultados
+  let sent = 0;
+  let failed = 0;
+  let deactivated = 0;
 
-  const errors = results.filter((r) => r.status === "rejected");
-  if (errors.length > 0) {
-    console.error(`${errors.length} mensajes fallaron:`, errors);
-  } else {
-    console.log(`✅ Todos los mensajes enviados exitosamente`);
+  results.forEach((result) => {
+    if (result.status === "fulfilled") {
+      if (result.value.status === "sent") sent++;
+      else if (result.value.status === "deactivated") deactivated++;
+      else failed++;
+    } else {
+      failed++;
+    }
+  });
+
+  console.log(
+    `📊 Resultados: ${sent} enviados, ${failed} fallidos, ${deactivated} desactivados`
+  );
+
+  if (deactivated > 0) {
+    console.log(
+      `🔄 Se desactivaron ${deactivated} suscriptores que no pueden recibir mensajes`
+    );
   }
+
+  return {
+    sent,
+    failed,
+    deactivated,
+    total: chatIds.length,
+  };
 }

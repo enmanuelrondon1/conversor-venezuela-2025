@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CheckCircle2, AlertCircle, UserPlus } from 'lucide-react';
+import { CheckCircle2, AlertCircle, UserPlus, Send, MessageCircle } from 'lucide-react';
 
 export default function SubscribePage() {
   const [chatId, setChatId] = useState('');
@@ -76,7 +76,7 @@ export default function SubscribePage() {
 
       if (response.ok) {
         setStatus('success');
-        setMessage('¡Suscripción exitosa! Revisa tu Telegram.');
+        setMessage(data.warning || '¡Suscripción exitosa! Revisa tu Telegram.');
       } else {
         setStatus('error');
         setMessage(data.error || 'Error al suscribirse. Intenta nuevamente.');
@@ -110,35 +110,84 @@ export default function SubscribePage() {
           <p className="text-slate-300">Recibe notificaciones de tasas en Telegram</p>
         </div>
 
-        {/* Instrucciones */}
+        {/* IMPORTANTE - Advertencia inicial */}
+        <Card className="bg-yellow-900/30 border-yellow-700">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-6 w-6 text-yellow-400 flex-shrink-0 mt-1" />
+              <div className="space-y-2">
+                <p className="font-semibold text-yellow-300">⚠️ ¡MUY IMPORTANTE!</p>
+                <p className="text-sm text-yellow-200">
+                  Antes de suscribirte, DEBES iniciar una conversación con nuestro bot.
+                  De lo contrario, NO podrás recibir notificaciones.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Instrucciones - MEJORADAS */}
         <Card className="bg-slate-800/80 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">📋 Cómo obtener tu Chat ID</CardTitle>
-            <CardDescription className="text-slate-300">Sigue estos pasos:</CardDescription>
+            <CardTitle className="text-white">📋 Pasos para suscribirte</CardTitle>
+            <CardDescription className="text-slate-300">Sigue estos pasos EN ORDEN:</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 text-slate-300">
-            <div className="space-y-2">
-              <p className="font-semibold text-white">Paso 1: Abre el bot en Telegram</p>
+          <CardContent className="space-y-4">
+            {/* PASO 1 - NUEVO: Iniciar conversación con EL BOT */}
+            <div className="space-y-2 p-4 bg-blue-900/30 border border-blue-700 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full font-bold">
+                  1
+                </div>
+                <p className="font-semibold text-white">Inicia conversación con nuestro bot</p>
+              </div>
+              <p className="text-sm text-slate-300 ml-10">
+                Abre el bot y envía <code className="bg-slate-700 px-2 py-1 rounded">/start</code>
+              </p>
               <Button
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                onClick={() => window.open('https://t.me/userinfobot', '_blank')}
+                className="w-full ml-10 mr-10 bg-blue-600 hover:bg-blue-700"
+                onClick={() => window.open('https://t.me/ConversorVenezuelaAlerts_bot', '_blank')}
               >
-                🤖 Abrir @userinfobot
+                <Send className="h-4 w-4 mr-2" />
+                Abrir @ConversorVenezuelaAlerts_bot
               </Button>
             </div>
 
-            <div className="space-y-2">
-              <p className="font-semibold text-white">Paso 2: Envía /start</p>
-              <p className="text-sm">El bot te responderá con tu información, incluyendo tu Chat ID</p>
+            {/* PASO 2: Obtener Chat ID */}
+            <div className="space-y-2 p-4 bg-slate-900/50 border border-slate-600 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-8 h-8 bg-slate-600 text-white rounded-full font-bold">
+                  2
+                </div>
+                <p className="font-semibold text-white">Obtén tu Chat ID</p>
+              </div>
+              <p className="text-sm text-slate-300 ml-10">
+                Abre este bot y envía <code className="bg-slate-700 px-2 py-1 rounded">/start</code>
+              </p>
+              <Button
+                variant="outline"
+                className="w-full ml-10 mr-10 bg-slate-700 border-slate-600 text-white hover:bg-slate-600"
+                onClick={() => window.open('https://t.me/userinfobot', '_blank')}
+              >
+                <MessageCircle className="h-4 w-4 mr-2" />
+                Abrir @userinfobot
+              </Button>
+              <p className="text-xs text-slate-400 ml-10">
+                El bot te responderá con tu información. Busca el número que dice "Id:" y cópialo.
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <p className="font-semibold text-white">Paso 3: Copia tu Chat ID</p>
-              <p className="text-sm">Es un número como: 1234567890</p>
-            </div>
-
-            <div className="space-y-2">
-              <p className="font-semibold text-white">Paso 4: Pégalo abajo</p>
+            {/* PASO 3: Pegar aquí */}
+            <div className="space-y-2 p-4 bg-green-900/30 border border-green-700 rounded-lg">
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-8 h-8 bg-green-600 text-white rounded-full font-bold">
+                  3
+                </div>
+                <p className="font-semibold text-white">Completa el formulario abajo</p>
+              </div>
+              <p className="text-sm text-slate-300 ml-10">
+                Pega tu Chat ID y haz clic en "Suscribirme"
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -277,9 +326,10 @@ export default function SubscribePage() {
             <div className="space-y-3 text-slate-300 text-sm">
               <p className="font-semibold text-white">📊 ¿Qué notificaciones recibirás?</p>
               <ul className="space-y-2 ml-4 list-disc">
-                <li>🔔 Alertas cuando el dólar cambie más del 1%</li>
-                <li>🌅 Resumen diario a las 8:00 AM</li>
-                <li>📈 Comparación oficial vs paralelo</li>
+                <li>🔔 Alertas cuando el dólar o euro cambien más del 1%</li>
+                <li>🌅 Resumen diario a las 8:00 AM (hora Venezuela)</li>
+                <li>📈 Comparación BCV vs Paralelo</li>
+                <li>💶 Actualizaciones del Euro</li>
               </ul>
               
               <p className="font-semibold text-white mt-4">🔒 Privacidad</p>
