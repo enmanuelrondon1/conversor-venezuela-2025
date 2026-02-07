@@ -1,12 +1,11 @@
 // app/subscribe/page.tsx
-
 'use client';
 
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CheckCircle2, AlertCircle, UserPlus } from 'lucide-react';
+import { CheckCircle2, AlertCircle, UserPlus, Send } from 'lucide-react';
 
 export default function SubscribePage() {
   const [chatId, setChatId] = useState('');
@@ -16,7 +15,6 @@ export default function SubscribePage() {
   const [status, setStatus] = useState<'idle' | 'success' | 'error' | 'already_subscribed'>('idle');
   const [message, setMessage] = useState('');
 
-  // Verificar si ya está suscrito ANTES de intentar suscribir
   const checkIfSubscribed = async (id: string) => {
     if (!id) return false;
     
@@ -40,14 +38,12 @@ export default function SubscribePage() {
       return;
     }
 
-    // Validar que sea un número
     if (!/^\d+$/.test(chatId.trim())) {
       setStatus('error');
       setMessage('El Chat ID debe ser un número');
       return;
     }
 
-    // Verificar si ya está suscrito primero
     setCheckingSubscription(true);
     const alreadySubscribed = await checkIfSubscribed(chatId.trim());
     setCheckingSubscription(false);
@@ -58,7 +54,6 @@ export default function SubscribePage() {
       return;
     }
 
-    // Proceder con la suscripción
     setLoading(true);
     setStatus('idle');
     
@@ -110,43 +105,79 @@ export default function SubscribePage() {
           <p className="text-slate-300">Recibe notificaciones de tasas en Telegram</p>
         </div>
 
-        {/* Instrucciones */}
-        <Card className="bg-slate-800/80 border-slate-700">
+        {/* PASO 1: Iniciar conversación con el bot - DESTACADO */}
+        <Card className="bg-gradient-to-br from-blue-900/90 to-blue-800/80 border-blue-600 border-2 shadow-lg shadow-blue-900/50">
           <CardHeader>
-            <CardTitle className="text-white">📋 Cómo obtener tu Chat ID</CardTitle>
-            <CardDescription className="text-slate-300">Sigue estos pasos:</CardDescription>
+            <CardTitle className="text-white text-xl flex items-center gap-2">
+              <Send className="h-6 w-6" />
+              🚨 PASO 1: Inicia conversación con el bot
+            </CardTitle>
+            <CardDescription className="text-blue-200 font-semibold">
+              ⚠️ MUY IMPORTANTE - Hazlo primero o no recibirás notificaciones
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 text-slate-300">
-            <div className="space-y-2">
-              <p className="font-semibold text-white">Paso 1: Abre el bot en Telegram</p>
+          <CardContent className="space-y-4">
+            <div className="bg-blue-950/50 border border-blue-700 rounded-lg p-4">
+              <p className="text-white font-semibold mb-3">
+                1️⃣ Abre el bot de notificaciones:
+              </p>
               <Button
-                className="w-full bg-blue-600 hover:bg-blue-700"
-                onClick={() => window.open('https://t.me/userinfobot', '_blank')}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-lg h-14"
+                onClick={() => window.open('https://t.me/conversor_venezuela_bot', '_blank')}
               >
-                🤖 Abrir @userinfobot
+                🤖 Abrir @conversor_venezuela_bot
               </Button>
             </div>
 
-            <div className="space-y-2">
-              <p className="font-semibold text-white">Paso 2: Envía /start</p>
-              <p className="text-sm">El bot te responderá con tu información, incluyendo tu Chat ID</p>
+            <div className="bg-blue-950/50 border border-blue-700 rounded-lg p-4">
+              <p className="text-white font-semibold mb-2">
+                2️⃣ Envía el comando <code className="bg-blue-800 px-2 py-1 rounded">/start</code>
+              </p>
+              <p className="text-sm text-blue-200">
+                El bot te responderá confirmando que está activo
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <p className="font-semibold text-white">Paso 3: Copia tu Chat ID</p>
-              <p className="text-sm">Es un número como: 1234567890</p>
-            </div>
-
-            <div className="space-y-2">
-              <p className="font-semibold text-white">Paso 4: Pégalo abajo</p>
+            <div className="bg-yellow-900/30 border border-yellow-600 rounded-lg p-3">
+              <p className="text-yellow-200 text-sm">
+                ⚠️ Si no haces este paso primero, tu suscripción se guardará pero NO recibirás ninguna notificación
+              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Formulario */}
+        {/* PASO 2: Obtener Chat ID */}
         <Card className="bg-slate-800/80 border-slate-700">
           <CardHeader>
-            <CardTitle className="text-white">✍️ Completa tu suscripción</CardTitle>
+            <CardTitle className="text-white">📋 PASO 2: Obtén tu Chat ID</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-slate-300">
+            <div className="space-y-2">
+              <p className="font-semibold text-white">1. Abre @userinfobot en Telegram</p>
+              <Button
+                className="w-full bg-slate-700 hover:bg-slate-600"
+                onClick={() => window.open('https://t.me/userinfobot', '_blank')}
+              >
+                🔍 Abrir @userinfobot
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <p className="font-semibold text-white">2. Envía /start</p>
+              <p className="text-sm">El bot te responderá con tu información</p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="font-semibold text-white">3. Copia tu Chat ID</p>
+              <p className="text-sm">Es un número como: 1234567890</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* PASO 3: Formulario */}
+        <Card className="bg-slate-800/80 border-slate-700">
+          <CardHeader>
+            <CardTitle className="text-white">✍️ PASO 3: Completa tu suscripción</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -188,7 +219,6 @@ export default function SubscribePage() {
               </Button>
             )}
 
-            {/* Mensaje de éxito */}
             {status === 'success' && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 p-4 bg-green-900/50 border border-green-700 rounded-lg">
@@ -196,7 +226,7 @@ export default function SubscribePage() {
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-green-300">{message}</p>
                     <p className="text-xs text-green-400 mt-1">
-                      Recibirás alertas cuando el dólar cambie y un resumen diario a las 8 AM
+                      Si enviaste /start al bot, deberías haber recibido un mensaje de bienvenida
                     </p>
                   </div>
                 </div>
@@ -220,7 +250,6 @@ export default function SubscribePage() {
               </div>
             )}
 
-            {/* Mensaje de ya suscrito */}
             {status === 'already_subscribed' && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 p-4 bg-yellow-900/50 border border-yellow-700 rounded-lg">
@@ -252,7 +281,6 @@ export default function SubscribePage() {
               </div>
             )}
 
-            {/* Mensaje de error */}
             {status === 'error' && (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 p-4 bg-red-900/50 border border-red-700 rounded-lg">
@@ -288,7 +316,6 @@ export default function SubscribePage() {
           </CardContent>
         </Card>
 
-        {/* Botón volver - solo si no hay mensajes */}
         {status === 'idle' && (
           <div className="text-center">
             <Button
