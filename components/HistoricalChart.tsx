@@ -2,14 +2,6 @@
 "use client";
 
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { BarChart3 } from "lucide-react";
-import {
   LineChart,
   Line,
   XAxis,
@@ -32,14 +24,14 @@ interface HistoricalChartProps {
   data: HistoricalData[];
 }
 
-// Tooltip personalizado
+// Tooltip personalizado con Euro incluido
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-gray-900 p-3 rounded-lg border border-gray-700 shadow-xl">
+      <div className="bg-gray-900 dark:bg-gray-800 p-3 rounded-lg border border-gray-700 dark:border-gray-600 shadow-xl">
         <p className="text-white font-semibold mb-2 text-sm">{label}</p>
         {payload.map((entry: any, index: number) => (
-          <p key={index} style={{ color: entry.color }} className="text-xs">
+          <p key={index} style={{ color: entry.color }} className="text-xs font-medium">
             {entry.name}: {entry.value.toFixed(2)}
             {entry.name.includes("%") ? "%" : " Bs"}
           </p>
@@ -54,37 +46,33 @@ export default function HistoricalChart({ data }: HistoricalChartProps) {
   const chartData = Array.isArray(data) ? data : [];
 
   if (chartData.length === 0) {
-    return null;
+    return (
+      <div className="p-6 text-center">
+        <p className="text-muted-foreground">No hay datos históricos disponibles</p>
+      </div>
+    );
   }
 
   return (
-    <Card className="shadow-xl border-0 mb-8">
-      <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-t-lg">
-        <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
-          <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
-          Historial del Diferencial
-        </CardTitle>
-        <CardDescription className="text-white/80 text-xs md:text-sm">
-          Evolución de las tasas BCV y Paralelo, y su diferencial porcentual
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="p-3 md:p-6">
+    <div className="p-3 md:p-6">
         {/* Versión móvil - Altura reducida */}
         <div className="block md:hidden">
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-20" />
               <XAxis
                 dataKey="date"
                 stroke="#6b7280"
                 tick={{ fontSize: 10 }}
                 interval="preserveStartEnd"
+                className="dark:stroke-gray-400"
               />
               <YAxis
                 yAxisId="left"
                 stroke="#ef4444"
                 tick={{ fontSize: 10 }}
                 width={40}
+                className="dark:stroke-red-400"
               />
               <YAxis
                 yAxisId="right"
@@ -92,6 +80,7 @@ export default function HistoricalChart({ data }: HistoricalChartProps) {
                 stroke="#3b82f6"
                 tick={{ fontSize: 10 }}
                 width={45}
+                className="dark:stroke-blue-400"
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend 
@@ -114,7 +103,17 @@ export default function HistoricalChart({ data }: HistoricalChartProps) {
                 dataKey="bcv"
                 stroke="#10b981"
                 strokeWidth={2}
-                name="BCV"
+                name="Tasa BCV"
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="euro"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                name="Tasa Euro"
                 dot={false}
                 activeDot={{ r: 4 }}
               />
@@ -124,7 +123,7 @@ export default function HistoricalChart({ data }: HistoricalChartProps) {
                 dataKey="paralelo"
                 stroke="#3b82f6"
                 strokeWidth={2}
-                name="Paralelo"
+                name="Tasa Paralelo"
                 dot={false}
                 activeDot={{ r: 4 }}
               />
@@ -136,11 +135,12 @@ export default function HistoricalChart({ data }: HistoricalChartProps) {
         <div className="hidden md:block">
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-20" />
               <XAxis
                 dataKey="date"
                 stroke="#6b7280"
                 style={{ fontSize: "12px" }}
+                className="dark:stroke-gray-400"
               />
               <YAxis
                 yAxisId="left"
@@ -152,6 +152,7 @@ export default function HistoricalChart({ data }: HistoricalChartProps) {
                   position: "insideLeft",
                   style: { fontSize: "12px" },
                 }}
+                className="dark:stroke-gray-400"
               />
               <YAxis
                 yAxisId="right"
@@ -164,6 +165,7 @@ export default function HistoricalChart({ data }: HistoricalChartProps) {
                   position: "insideRight",
                   style: { fontSize: "12px" },
                 }}
+                className="dark:stroke-gray-400"
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
@@ -188,6 +190,15 @@ export default function HistoricalChart({ data }: HistoricalChartProps) {
               <Line
                 yAxisId="right"
                 type="monotone"
+                dataKey="euro"
+                stroke="#f59e0b"
+                strokeWidth={2}
+                name="Tasa Euro"
+                dot={{ fill: "#f59e0b" }}
+              />
+              <Line
+                yAxisId="right"
+                type="monotone"
                 dataKey="paralelo"
                 stroke="#3b82f6"
                 strokeWidth={2}
@@ -197,7 +208,6 @@ export default function HistoricalChart({ data }: HistoricalChartProps) {
             </LineChart>
           </ResponsiveContainer>
         </div>
-      </CardContent>
-    </Card>
-  );
-}
+      </div>
+    );
+  }

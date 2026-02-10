@@ -62,7 +62,7 @@ export default function CurrencyConverter({
           Calculadora de Conversión
         </CardTitle>
         <CardDescription className="text-white/80">
-          Convierte entre dólares y bolívares usando diferentes tasas
+          Convierte entre diferentes divisas usando las tasas más recientes
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6 space-y-6">
@@ -78,6 +78,7 @@ export default function CurrencyConverter({
             <SelectContent>
               <SelectItem value="oficial">💵 Dólar BCV Oficial</SelectItem>
               <SelectItem value="paralelo">📈 Dólar Paralelo</SelectItem>
+              <SelectItem value="euro">💶 Euro</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -92,6 +93,7 @@ export default function CurrencyConverter({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="USD">USD 🇺🇸</SelectItem>
+                <SelectItem value="EUR">EUR 🇪🇺</SelectItem>
                 <SelectItem value="VES">VES 🇻🇪</SelectItem>
               </SelectContent>
             </Select>
@@ -127,6 +129,7 @@ export default function CurrencyConverter({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="USD">USD 🇺🇸</SelectItem>
+                <SelectItem value="EUR">EUR 🇪🇺</SelectItem>
                 <SelectItem value="VES">VES 🇻🇪</SelectItem>
               </SelectContent>
             </Select>
