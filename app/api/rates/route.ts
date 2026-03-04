@@ -1,13 +1,14 @@
 // app/api/rates/route.ts
-// SOLUCIÓN DEFINITIVA CON EXCHANGERATE-API
+// VERSIÓN MEJORADA: Combina scraper BCV + ExchangeRate-API + DolarApi
 
 import { NextResponse } from 'next/server';
 import { saveRateToHistory } from "@/lib/rate-history-service";
+import { scrapeBCV } from "@/lib/bcv-scraper";
 
 export const dynamic = 'force-dynamic'; 
 
 // Tu API key
-const EXCHANGERATE_API_KEY = 'fe961c28fac21978f7abd47e';
+const EXCHANGERATE_API_KEY = process.env.EXCHANGERATE_API_KEY || '';
 
 interface ExchangeRate {
   fuente: string;
@@ -24,13 +25,58 @@ let lastFetchTime: number = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
 /**
- * Obtiene la tasa oficial del BCV y del Euro desde ExchangeRate-API
+ * ESTRATEGIA 1: Intentar obtener del BCV directamente (scraping)
  */
-async function fetchOfficialRates(): Promise<{ bcv: ExchangeRate | null, euro: ExchangeRate | null }> {
+async function fetchFromBCVScraper(): Promise<{ bcv: ExchangeRate | null, euro: ExchangeRate | null }> {
   try {
-    console.log('🔍 Obteniendo tasas oficiales desde ExchangeRate-API...');
+    console.log('🔍 Intentando scraper del BCV...');
     
-    // 1. Obtener USD/VES (Dólar BCV)
+    const bcvData = await scrapeBCV();
+    
+    if (!bcvData || !bcvData.usd) {
+      console.log('⚠️ Scraper BCV no devolvió datos');
+      return { bcv: null, euro: null };
+    }
+    
+    const bcvRate: ExchangeRate = {
+      fuente: 'oficial',
+      nombre: 'Dólar BCV Oficial',
+      compra: null,
+      venta: null,
+      promedio: bcvData.usd,
+      fechaActualizacion: bcvData.date
+    };
+    
+    const euroRate: ExchangeRate | null = bcvData.eur ? {
+      fuente: 'euro',
+      nombre: 'Euro',
+      compra: null,
+      venta: null,
+      promedio: bcvData.eur,
+      fechaActualizacion: bcvData.date
+    } : null;
+    
+    console.log('✅ BCV Scraper exitoso - USD:', bcvData.usd.toFixed(2), 'Bs/$');
+    if (bcvData.eur) {
+      console.log('✅ EUR desde BCV:', bcvData.eur.toFixed(2), 'Bs/€');
+    }
+    
+    return { bcv: bcvRate, euro: euroRate };
+    
+  } catch (error) {
+    console.error('❌ Error en scraper BCV:', error);
+    return { bcv: null, euro: null };
+  }
+}
+
+/**
+ * ESTRATEGIA 2: Fallback a ExchangeRate-API
+ */
+async function fetchFromExchangeRateAPI(): Promise<{ bcv: ExchangeRate | null, euro: ExchangeRate | null }> {
+  try {
+    console.log('🔍 Usando ExchangeRate-API como fallback...');
+    
+    // 1. Obtener USD/VES
     const usdUrl = `https://v6.exchangerate-api.com/v6/${EXCHANGERATE_API_KEY}/latest/USD`;
     const usdResponse = await fetch(usdUrl, {
       cache: 'no-store',
@@ -38,7 +84,7 @@ async function fetchOfficialRates(): Promise<{ bcv: ExchangeRate | null, euro: E
     });
     
     if (!usdResponse.ok) {
-      console.error('❌ Error obteniendo USD/VES');
+      console.error('❌ Error obteniendo USD/VES de ExchangeRate-API');
       return { bcv: null, euro: null };
     }
     
@@ -46,18 +92,18 @@ async function fetchOfficialRates(): Promise<{ bcv: ExchangeRate | null, euro: E
     const usdToVes = usdData.conversion_rates?.VES;
     
     if (!usdToVes) {
-      console.error('❌ No se encontró VES en USD');
+      console.error('❌ No se encontró VES en respuesta USD');
       return { bcv: null, euro: null };
     }
     
-    // 2. Obtener EUR/VES (Euro) - Hacer llamada con base EUR
+    // 2. Obtener EUR/VES
     const eurUrl = `https://v6.exchangerate-api.com/v6/${EXCHANGERATE_API_KEY}/latest/EUR`;
     const eurResponse = await fetch(eurUrl, {
       cache: 'no-store',
       signal: AbortSignal.timeout(10000)
     });
     
-    let eurToVes = usdToVes * 1.17; // Valor por defecto si falla
+    let eurToVes = usdToVes * 1.17; // Valor por defecto
     
     if (eurResponse.ok) {
       const eurData = await eurResponse.json();
@@ -65,7 +111,6 @@ async function fetchOfficialRates(): Promise<{ bcv: ExchangeRate | null, euro: E
       
       if (eurVesRate) {
         eurToVes = eurVesRate;
-        console.log('✅ EUR/VES obtenido directamente:', eurToVes);
       }
     }
     
@@ -89,23 +134,42 @@ async function fetchOfficialRates(): Promise<{ bcv: ExchangeRate | null, euro: E
       fechaActualizacion: lastUpdate
     };
     
-    console.log('✅ USD/VES (BCV):', usdToVes.toFixed(2), 'Bs/$');
-    console.log('✅ EUR/VES:', eurToVes.toFixed(2), 'Bs/€');
+    console.log('✅ ExchangeRate-API - USD:', usdToVes.toFixed(2), 'Bs/$');
+    console.log('✅ ExchangeRate-API - EUR:', eurToVes.toFixed(2), 'Bs/€');
     
     return { bcv: bcvRate, euro: euroRate };
     
   } catch (error) {
-    console.error('❌ Error obteniendo tasas oficiales:', error);
+    console.error('❌ Error en ExchangeRate-API:', error);
     return { bcv: null, euro: null };
   }
 }
 
 /**
- * Obtiene las tasas del mercado paralelo desde DolarApi
+ * Obtiene las tasas oficiales usando estrategia híbrida:
+ * 1. Intenta scraper BCV primero (más actualizado)
+ * 2. Si falla, usa ExchangeRate-API como fallback
  */
-async function fetchParaleloRates(): Promise<ExchangeRate[]> {
+async function fetchOfficialRates(): Promise<{ bcv: ExchangeRate | null, euro: ExchangeRate | null }> {
+  // Intentar scraper primero
+  const scraperResult = await fetchFromBCVScraper();
+  
+  if (scraperResult.bcv) {
+    console.log('✅ Usando datos del scraper BCV');
+    return scraperResult;
+  }
+  
+  // Fallback a ExchangeRate-API
+  console.log('⚠️ Scraper BCV falló, usando ExchangeRate-API');
+  return await fetchFromExchangeRateAPI();
+}
+
+/**
+ * Obtiene TODAS las tasas desde DolarApi (oficial, paralelo, etc.)
+ */
+async function fetchFromDolarApi(): Promise<ExchangeRate[]> {
   try {
-    console.log('🔍 Obteniendo tasas del paralelo desde DolarApi...');
+    console.log('🔍 Obteniendo tasas desde DolarApi...');
     
     const response = await fetch('https://ve.dolarapi.com/v1/dolares', {
       cache: 'no-store',
@@ -119,15 +183,17 @@ async function fetchParaleloRates(): Promise<ExchangeRate[]> {
     
     const data: ExchangeRate[] = await response.json();
     
-    // Solo tomar el paralelo y otras tasas que NO sean oficial
-    const nonOfficialRates = data.filter(r => r.fuente !== 'oficial');
+    console.log('✅ Tasas obtenidas de DolarApi:', data.length);
     
-    console.log('✅ Tasas del paralelo obtenidas:', nonOfficialRates.length);
+    // Mostrar todas las tasas obtenidas
+    data.forEach(rate => {
+      console.log(`   - ${rate.nombre} (${rate.fuente}): ${rate.promedio} Bs`);
+    });
     
-    return nonOfficialRates;
+    return data;
     
   } catch (error) {
-    console.warn('⚠️ Error obteniendo tasas del paralelo:', error);
+    console.warn('⚠️ Error obteniendo tasas de DolarApi:', error);
     return [];
   }
 }
@@ -140,7 +206,8 @@ async function fetchAllRates(): Promise<ExchangeRate[]> {
   
   // Si el caché es válido, retornarlo
   if (cachedRates && (now - lastFetchTime) < CACHE_DURATION) {
-    console.log('📦 Usando caché (edad:', Math.round((now - lastFetchTime) / 1000), 'segundos)');
+    const cacheAge = Math.round((now - lastFetchTime) / 1000);
+    console.log(`📦 Usando caché (edad: ${cacheAge}s / ${CACHE_DURATION/1000}s)`);
     return cachedRates;
   }
   
@@ -148,16 +215,26 @@ async function fetchAllRates(): Promise<ExchangeRate[]> {
   
   const rates: ExchangeRate[] = [];
   
-  // 1. Obtener tasas oficiales (BCV y Euro)
-  const { bcv, euro } = await fetchOfficialRates();
-  if (bcv) rates.push(bcv);
-  if (euro) rates.push(euro);
+  // 1. Obtener tasas desde DolarApi (oficial, paralelo, etc.)
+  const dolarApiRates = await fetchFromDolarApi();
+  rates.push(...dolarApiRates);
   
-  // 2. Obtener tasas del paralelo
-  const paraleloRates = await fetchParaleloRates();
-  rates.push(...paraleloRates);
+  // 2. Obtener Euro desde ExchangeRate-API si no viene en DolarApi
+  const hasEuro = rates.some(r => r.fuente === 'euro');
+  
+  if (!hasEuro) {
+    const { euro } = await fetchFromExchangeRateAPI();
+    if (euro) rates.push(euro);
+  }
   
   // Validar que tengamos al menos el oficial
+  if (rates.length === 0) {
+    console.warn('⚠️ DolarApi falló, intentando ExchangeRate-API como fallback...');
+    const { bcv, euro } = await fetchFromExchangeRateAPI();
+    if (bcv) rates.push(bcv);
+    if (euro) rates.push(euro);
+  }
+  
   if (rates.length === 0) {
     throw new Error('No se pudieron obtener tasas de ninguna fuente');
   }
