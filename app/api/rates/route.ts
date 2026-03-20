@@ -218,14 +218,38 @@ async function fetchAllRates(): Promise<ExchangeRate[]> {
   // 1. Obtener tasas desde DolarApi (oficial, paralelo, etc.)
   const dolarApiRates = await fetchFromDolarApi();
   rates.push(...dolarApiRates);
-  
-  // 2. Obtener Euro desde ExchangeRate-API si no viene en DolarApi
-  const hasEuro = rates.some(r => r.fuente === 'euro');
-  
-  if (!hasEuro) {
-    const { euro } = await fetchFromExchangeRateAPI();
-    if (euro) rates.push(euro);
+// 2. Obtener Euro desde ExchangeRate-API siempre
+const hasEuro = rates.some(r => r.fuente === 'euro');
+
+if (!hasEuro) {
+  try {
+    const oficialBs = rates.find(r => r.fuente === 'oficial')?.promedio;
+    const eurUrl = `https://v6.exchangerate-api.com/v6/${EXCHANGERATE_API_KEY}/latest/EUR`;
+    const eurResponse = await fetch(eurUrl, {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (eurResponse.ok) {
+      const eurData = await eurResponse.json();
+      const eurToVes = eurData.conversion_rates?.VES;
+
+      if (eurToVes) {
+        rates.push({
+          fuente: 'euro',
+          nombre: 'Euro',
+          compra: null,
+          venta: null,
+          promedio: eurToVes,
+          fechaActualizacion: new Date(eurData.time_last_update_unix * 1000).toISOString()
+        });
+        console.log('✅ EUR desde ExchangeRate-API:', eurToVes.toFixed(2), 'Bs/€');
+      }
+    }
+  } catch (e) {
+    console.warn('⚠️ No se pudo obtener EUR:', e);
   }
+}
   
   // Validar que tengamos al menos el oficial
   if (rates.length === 0) {
