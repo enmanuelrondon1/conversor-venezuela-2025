@@ -100,10 +100,21 @@ export async function POST(request: Request) {
     // COMANDO /historial
     // =====================
     if (text === "/historial") {
-      const records = await prisma.rateHistory.findMany({
+    // Un registro por día (el más reciente de cada día)
+      const allRecords = await prisma.rateHistory.findMany({
         orderBy: { fecha: "desc" },
-        take: 7,
+        take: 50,
       });
+
+      const seen = new Set<string>();
+      const records = allRecords.filter((r) => {
+        const day = new Date(r.fecha).toLocaleDateString("es-VE", {
+          timeZone: "America/Caracas",
+        });
+        if (seen.has(day)) return false;
+        seen.add(day);
+        return true;
+      }).slice(0, 7);
 
       if (records.length === 0) {
         await sendMessage(chatId, "📭 No hay historial disponible aún.");
