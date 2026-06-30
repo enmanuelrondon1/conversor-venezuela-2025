@@ -110,74 +110,73 @@ export default function Home() {
     calculateConversion();
   }, [amount, fromCurrency, toCurrency, selectedRate, rates]);
 
-  const calculateConversion = () => {
-    if (!amount || rates.length === 0) return;
+const calculateConversion = () => {
+  if (!amount || rates.length === 0) return;
 
-    const oficialRate = rates.find((r) => r.fuente === "oficial")?.promedio || 0;
-    const paraleloRate = rates.find((r) => r.fuente === "paralelo")?.promedio || 0;
-    const euroRate = rates.find((r) => r.fuente === "euro")?.promedio || 0;
+  const oficialRate = rates.find((r) => r.fuente === "oficial")?.promedio || 0;
+  const paraleloRate = rates.find((r) => r.fuente === "paralelo")?.promedio || 0;
+  const euroRate = rates.find((r) => r.fuente === "euro")?.promedio || 0;
 
-    if (!oficialRate || !paraleloRate || !euroRate) return;
+  // ❌ ANTES: bloqueaba todo si faltaba CUALQUIER tasa
+  // if (!oficialRate || !paraleloRate || !euroRate) return;
 
-    let rateToUse = 0;
-    switch (selectedRate) {
-      case "oficial":
-        rateToUse = oficialRate;
-        break;
-      case "paralelo":
-        rateToUse = paraleloRate;
-        break;
-      case "euro":
-        // Cuando la tasa seleccionada es Euro, la conversión es directa a bolívares
-        rateToUse = euroRate;
-        break;
-      default:
-        rateToUse = oficialRate;
+  // ✅ AHORA: solo exige la tasa base que realmente se va a usar
+  if (!oficialRate || !paraleloRate) return;
+
+  let rateToUse = 0;
+  switch (selectedRate) {
+    case "oficial":
+      rateToUse = oficialRate;
+      break;
+    case "paralelo":
+      rateToUse = paraleloRate;
+      break;
+    case "euro":
+      if (!euroRate) return; // solo bloquea si de verdad necesitas el euro
+      rateToUse = euroRate;
+      break;
+    default:
+      rateToUse = oficialRate;
+  }
+
+  const numAmount = parseFloat(amount);
+  if (isNaN(numAmount)) return;
+
+  let finalResult = 0;
+
+  if (fromCurrency === "VES") {
+    if (toCurrency === "USD") {
+      finalResult = numAmount / rateToUse;
+    } else if (toCurrency === "EUR") {
+      if (!euroRate) return;
+      finalResult = numAmount / euroRate;
+    } else {
+      finalResult = numAmount;
     }
-
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount)) return;
-
-    let finalResult = 0;
-
-    // Conversiones desde VES
-    if (fromCurrency === "VES") {
-      if (toCurrency === "USD") {
-        finalResult = numAmount / rateToUse;
-      } else if (toCurrency === "EUR") {
-        finalResult = numAmount / euroRate;
-      } else {
-        finalResult = numAmount; // VES a VES
-      }
+  } else if (fromCurrency === "USD") {
+    if (toCurrency === "VES") {
+      finalResult = numAmount * rateToUse;
+    } else if (toCurrency === "EUR") {
+      if (!euroRate) return;
+      const amountInVES = numAmount * rateToUse;
+      finalResult = amountInVES / euroRate;
+    } else {
+      finalResult = numAmount;
     }
-    // Conversiones desde USD
-    else if (fromCurrency === "USD") {
-      if (toCurrency === "VES") {
-        finalResult = numAmount * rateToUse;
-      } else if (toCurrency === "EUR") {
-        // Convertir USD a VES (usando tasa oficial/paralelo) y luego a EUR
-        const amountInVES = numAmount * rateToUse;
-        finalResult = amountInVES / euroRate;
-      } else {
-        finalResult = numAmount; // USD a USD
-      }
+  } else if (fromCurrency === "EUR") {
+    if (!euroRate) return;
+    if (toCurrency === "VES") {
+      finalResult = numAmount * euroRate;
+    } else if (toCurrency === "USD") {
+      const amountInVES = numAmount * euroRate;
+      finalResult = amountInVES / rateToUse;
+    } else {
+      finalResult = numAmount;
     }
-    // Conversiones desde EUR
-    else if (fromCurrency === "EUR") {
-      if (toCurrency === "VES") {
-        finalResult = numAmount * euroRate;
-      } else if (toCurrency === "USD") {
-        // Convertir EUR a VES y luego a USD (usando tasa oficial/paralelo)
-        const amountInVES = numAmount * euroRate;
-        finalResult = amountInVES / rateToUse;
-      } else {
-        finalResult = numAmount; // EUR a EUR
-      }
-    }
+  }
 
-    setResult(finalResult);
-  };
-
+  setResult(finalResult);
+};
   const swapCurrencies = () => {
     setFromCurrency(toCurrency);
     setToCurrency(fromCurrency);
