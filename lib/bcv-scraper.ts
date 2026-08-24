@@ -21,6 +21,7 @@ const bcvAgent = new Agent({
   },
 });
 
+
 /**
  * Hace scraping directo de la página del BCV
  * Extrae la tasa USD y la fecha de actualización
