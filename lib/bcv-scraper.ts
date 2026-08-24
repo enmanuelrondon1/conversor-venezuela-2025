@@ -1,11 +1,25 @@
 // lib/bcv-scraper.ts
 
+import { Agent } from 'undici';
+import { BCV_CA_BUNDLE } from './bcv-ca-bundle';
+
 export interface BCVRate {
   usd: number;
   eur: number | null;
-  date: string;
+  date: string; 
   source: 'bcv';
 }
+
+// Agent de undici que confía en el certificado intermedio correcto del BCV.
+// El servidor de bcv.org.ve manda un intermedio desactualizado (bug de ellos,
+// tras la migración de Sectigo de junio 2025), así que la verificación TLS
+// estándar de Node lo rechaza. Este agente confía SOLO en la cadena real
+// del BCV, sin desactivar la verificación SSL global de la app.
+const bcvAgent = new Agent({
+  connect: {
+    ca: BCV_CA_BUNDLE,
+  },
+});
 
 /**
  * Hace scraping directo de la página del BCV
@@ -35,6 +49,8 @@ export async function scrapeBCV(): Promise<BCVRate | null> {
         signal: controller.signal,
         // @ts-ignore - Next.js specific
         cache: 'no-store',
+        // @ts-ignore - undici specific, confía en el cert real del BCV
+        dispatcher: bcvAgent,
       });
       
       clearTimeout(timeoutId);
